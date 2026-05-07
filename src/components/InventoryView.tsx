@@ -1,8 +1,10 @@
 'use client';
 import { useState, useRef } from 'react';
 import { useStore } from '@/lib/store';
-import { CATEGORIES, CAT_COLORS, CAT_ICONS } from '@/lib/data';
+import { CATEGORIES, CAT_COLORS } from '@/lib/data';
+import { CategoryIcon } from '@/lib/icons';
 import { fmt, getStockStatus, round2 } from '@/lib/utils';
+import { Search, FileSpreadsheet, Plus, PlusCircle, Save, Trash2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 export default function InventoryView() {
@@ -56,19 +58,25 @@ export default function InventoryView() {
       <div className="flex items-center justify-between mb-5">
         <h2 className="text-xl font-extrabold">Inventario</h2>
         <div className="flex gap-2">
-          <button onClick={() => fileRef.current?.click()} className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-bold rounded-lg"><i className="fas fa-file-excel mr-2" />Importar Excel</button>
+          <button onClick={() => fileRef.current?.click()}
+            className="flex items-center gap-1.5 px-4 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-bold rounded-lg transition-all">
+            <FileSpreadsheet size={15} /> Importar Excel
+          </button>
           <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleImport} className="hidden" />
-          <button onClick={() => setShowNew(true)} className="px-4 py-2.5 bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-bold rounded-lg"><i className="fas fa-plus mr-2" />Nuevo Producto</button>
+          <button onClick={() => setShowNew(true)}
+            className="flex items-center gap-1.5 px-4 py-2.5 bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-bold rounded-lg transition-all">
+            <Plus size={15} /> Nuevo Producto
+          </button>
         </div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-5">
         {[
-          { l: 'Total Productos', v: products.length, c: 'bg-blue-100 text-blue-600' },
-          { l: 'Valor Inventario', v: fmt(totalValue), c: 'bg-green-100 text-green-600' },
-          { l: 'Costo Inventario', v: fmt(totalCost), c: 'bg-indigo-100 text-indigo-600' },
-          { l: 'Stock Bajo', v: lowStock, c: 'bg-amber-100 text-amber-600' },
-          { l: 'Agotados', v: products.filter(p => p.stock === 0).length, c: 'bg-red-100 text-red-600' },
+          { l: 'Total Productos', v: products.length },
+          { l: 'Valor Inventario', v: fmt(totalValue) },
+          { l: 'Costo Inventario', v: fmt(totalCost) },
+          { l: 'Stock Bajo',       v: lowStock },
+          { l: 'Agotados',         v: products.filter(p => p.stock === 0).length },
         ].map((m, i) => (
           <div key={i} className="bg-white rounded-xl p-4 border shadow-sm">
             <div className="text-[10px] font-semibold text-slate-500 uppercase mb-1">{m.l}</div>
@@ -79,7 +87,7 @@ export default function InventoryView() {
 
       <div className="flex gap-3 mb-4">
         <div className="relative flex-1">
-          <i className="fas fa-search absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+          <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar producto..."
             className="w-full pl-10 pr-4 py-2.5 border rounded-lg text-sm focus:border-indigo-500 outline-none" />
         </div>
@@ -95,10 +103,15 @@ export default function InventoryView() {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-[10px] font-bold uppercase text-slate-500 bg-slate-50 sticky top-0 z-10">
-                <th className="px-4 py-3 text-left">Producto</th><th className="px-4 py-3 text-left">Categoria</th>
-                <th className="px-4 py-3 text-left">Cod. Barras</th><th className="px-4 py-3 text-right">Precio</th>
-                <th className="px-4 py-3 text-right">Costo</th><th className="px-4 py-3 text-right">Margen</th>
-                <th className="px-4 py-3 text-left">Stock</th><th className="px-4 py-3 text-left">Estado</th><th className="px-4 py-3">Acc.</th>
+                <th className="px-4 py-3 text-left">Producto</th>
+                <th className="px-4 py-3 text-left">Categoria</th>
+                <th className="px-4 py-3 text-left">Cod. Barras</th>
+                <th className="px-4 py-3 text-right">Precio</th>
+                <th className="px-4 py-3 text-right">Costo</th>
+                <th className="px-4 py-3 text-right">Margen</th>
+                <th className="px-4 py-3 text-left">Stock</th>
+                <th className="px-4 py-3 text-left">Estado</th>
+                <th className="px-4 py-3">Acc.</th>
               </tr>
             </thead>
             <tbody>
@@ -109,18 +122,32 @@ export default function InventoryView() {
                   <tr key={p.id} className="border-t border-slate-100 hover:bg-indigo-50/30">
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded flex items-center justify-center text-xs"
+                        <div className="w-8 h-8 rounded flex items-center justify-center"
                           style={{ background: CAT_COLORS[p.category] + '22', color: CAT_COLORS[p.category] }}>
-                          <i className={`fas ${CAT_ICONS[p.category]}`} />
+                          <CategoryIcon category={p.category} size={14} />
                         </div>
                         <EditableCell value={p.name} onSave={v => updateProduct(p.id, { name: v })} bold />
                       </div>
                     </td>
-                    <td className="px-4 py-3"><span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: CAT_COLORS[p.category] + '22', color: CAT_COLORS[p.category] }}>{p.category}</span></td>
-                    <td className="px-4 py-3 font-mono text-[11px] text-slate-500"><EditableCell value={p.barcode} onSave={v => updateProduct(p.id, { barcode: v })} /></td>
-                    <td className="px-4 py-3 text-right"><EditableCell value={String(p.price)} onSave={v => updateProduct(p.id, { price: parseFloat(v) || 0 })} isNumber bold /></td>
-                    <td className="px-4 py-3 text-right text-slate-500"><EditableCell value={String(p.cost)} onSave={v => updateProduct(p.id, { cost: parseFloat(v) || 0 })} isNumber /></td>
-                    <td className="px-4 py-3 text-right"><span className={`font-semibold ${margin >= 30 ? 'text-emerald-600' : 'text-amber-600'}`}>{margin}%</span></td>
+                    <td className="px-4 py-3">
+                      <span className="text-xs font-semibold px-2 py-0.5 rounded-full flex items-center gap-1 w-fit"
+                        style={{ background: CAT_COLORS[p.category] + '22', color: CAT_COLORS[p.category] }}>
+                        <CategoryIcon category={p.category} size={10} />
+                        {p.category}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 font-mono text-[11px] text-slate-500">
+                      <EditableCell value={p.barcode} onSave={v => updateProduct(p.id, { barcode: v })} />
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <EditableCell value={String(p.price)} onSave={v => updateProduct(p.id, { price: parseFloat(v) || 0 })} isNumber bold />
+                    </td>
+                    <td className="px-4 py-3 text-right text-slate-500">
+                      <EditableCell value={String(p.cost)} onSave={v => updateProduct(p.id, { cost: parseFloat(v) || 0 })} isNumber />
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <span className={`font-semibold ${margin >= 30 ? 'text-emerald-600' : 'text-amber-600'}`}>{margin}%</span>
+                    </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <span className="font-bold">{p.stock}</span>
@@ -130,13 +157,19 @@ export default function InventoryView() {
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-3"><span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${s.cls}`}>{s.label}</span></td>
+                    <td className="px-4 py-3">
+                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${s.cls}`}>{s.label}</span>
+                    </td>
                     <td className="px-4 py-3">
                       <div className="flex gap-1 justify-center">
                         <button onClick={() => { const qty = prompt('Cantidad a agregar:'); if (qty) addStock(p.id, parseInt(qty) || 0); }}
-                          className="w-7 h-7 rounded border border-slate-200 flex items-center justify-center text-slate-400 hover:text-indigo-500 hover:border-indigo-300" title="Stock"><i className="fas fa-plus text-xs" /></button>
+                          className="w-7 h-7 rounded border border-slate-200 flex items-center justify-center text-slate-400 hover:text-indigo-500 hover:border-indigo-300 transition-all" title="Agregar stock">
+                          <Plus size={12} />
+                        </button>
                         <button onClick={() => { if (confirm(`Eliminar ${p.name}?`)) deleteProduct(p.id); }}
-                          className="w-7 h-7 rounded border border-slate-200 flex items-center justify-center text-slate-400 hover:text-red-500 hover:border-red-300" title="Eliminar"><i className="fas fa-trash text-xs" /></button>
+                          className="w-7 h-7 rounded border border-slate-200 flex items-center justify-center text-slate-400 hover:text-red-500 hover:border-red-300 transition-all" title="Eliminar">
+                          <Trash2 size={12} />
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -150,11 +183,18 @@ export default function InventoryView() {
       {showNew && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center" onClick={() => setShowNew(false)}>
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-[90%] p-6" onClick={e => e.stopPropagation()}>
-            <h3 className="font-bold text-base mb-4"><i className="fas fa-plus-circle text-indigo-500 mr-2" />Nuevo Producto</h3>
+            <h3 className="font-bold text-base mb-4 flex items-center gap-2">
+              <PlusCircle size={18} className="text-indigo-500" /> Nuevo Producto
+            </h3>
             <Field label="Nombre" value={newP.name} onChange={v => setNewP({ ...newP, name: v })} />
             <div className="grid grid-cols-2 gap-3">
-              <div className="mb-3"><label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Categoria</label>
-                <select value={newP.category} onChange={e => setNewP({ ...newP, category: e.target.value })} className="w-full px-3 py-2.5 border rounded-lg text-sm">{CATEGORIES.map(c => <option key={c}>{c}</option>)}</select></div>
+              <div className="mb-3">
+                <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Categoria</label>
+                <select value={newP.category} onChange={e => setNewP({ ...newP, category: e.target.value })}
+                  className="w-full px-3 py-2.5 border rounded-lg text-sm">
+                  {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+                </select>
+              </div>
               <Field label="Codigo de Barras" value={newP.barcode} onChange={v => setNewP({ ...newP, barcode: v })} />
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -163,14 +203,27 @@ export default function InventoryView() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Stock" value={newP.stock} onChange={v => setNewP({ ...newP, stock: v })} type="number" />
-              <div className="mb-3"><label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Unidad</label>
-                <select value={newP.unit} onChange={e => setNewP({ ...newP, unit: e.target.value })} className="w-full px-3 py-2.5 border rounded-lg text-sm">
-                  <option value="pza">Pieza</option><option value="kg">Kilogramo</option><option value="lt">Litro</option></select></div>
+              <div className="mb-3">
+                <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Unidad</label>
+                <select value={newP.unit} onChange={e => setNewP({ ...newP, unit: e.target.value })}
+                  className="w-full px-3 py-2.5 border rounded-lg text-sm">
+                  <option value="pza">Pieza</option>
+                  <option value="kg">Kilogramo</option>
+                  <option value="lt">Litro</option>
+                </select>
+              </div>
             </div>
             <div className="flex justify-end gap-2 mt-2">
-              <button onClick={() => setShowNew(false)} className="px-4 py-2 text-sm font-semibold border border-slate-200 rounded-lg">Cancelar</button>
-              <button onClick={() => { if (!newP.name || !newP.price) return; addProduct({ name: newP.name, category: newP.category, barcode: newP.barcode, price: parseFloat(newP.price) || 0, cost: parseFloat(newP.cost) || 0, stock: parseInt(newP.stock) || 0, unit: newP.unit }); setShowNew(false); setNewP({ name: '', category: 'Abarrotes', barcode: '', price: '', cost: '', stock: '', unit: 'pza' }); }}
-                className="px-5 py-2 text-sm font-bold bg-indigo-500 text-white rounded-lg"><i className="fas fa-save mr-1" />Guardar</button>
+              <button onClick={() => setShowNew(false)}
+                className="px-4 py-2 text-sm font-semibold border border-slate-200 rounded-lg">Cancelar</button>
+              <button onClick={() => {
+                if (!newP.name || !newP.price) return;
+                addProduct({ name: newP.name, category: newP.category, barcode: newP.barcode, price: parseFloat(newP.price) || 0, cost: parseFloat(newP.cost) || 0, stock: parseInt(newP.stock) || 0, unit: newP.unit });
+                setShowNew(false);
+                setNewP({ name: '', category: 'Abarrotes', barcode: '', price: '', cost: '', stock: '', unit: 'pza' });
+              }} className="flex items-center gap-1.5 px-5 py-2 text-sm font-bold bg-indigo-500 text-white rounded-lg">
+                <Save size={14} /> Guardar
+              </button>
             </div>
           </div>
         </div>
