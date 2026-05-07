@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "rm -rf .next out && next build && echo BUILD_OK > out/BUILD_VERSION.txt && date >> out/BUILD_VERSION.txt",
     "start": "node server.js",
     "lint": "next lint"
   },

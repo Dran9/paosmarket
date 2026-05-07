@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: "Paolita's Market - Sistema POS",
+  title: "v2.1 DB · Paolita's Market",
   description: 'Sistema de punto de venta para Paolitas Market',
 };
 

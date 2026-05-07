@@ -584,14 +584,22 @@ const SERVER_VERSION = '2.1.0-' + new Date().toISOString().slice(0, 16);
 
 // Health check (sin auth) — DEBE ir antes del catch-all
 app.get('/api/health', (req, res) => {
+  let buildVersion = 'unknown';
+  try {
+    const bv = path.join(staticDir, 'BUILD_VERSION.txt');
+    if (fs.existsSync(bv)) buildVersion = fs.readFileSync(bv, 'utf8').trim();
+  } catch {}
   res.json({
     ok: true,
     db: dbReady,
     time: new Date().toISOString(),
-    version: SERVER_VERSION,
+    serverVersion: SERVER_VERSION,
+    buildVersion,
     hasOut,
     hasIndex,
     nodeVersion: process.version,
+    cwd: process.cwd(),
+    staticDir,
   });
 });
 
