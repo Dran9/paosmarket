@@ -7,20 +7,30 @@ const multer = require('multer');
 const XLSX = require('xlsx');
 const fs = require('fs');
 
-let config;
-try {
-  config = require('./config.json');
-} catch {
-  console.error('ERROR: config.json no encontrado. Copia config.example.json a config.json y configura tus credenciales.');
+// Lee credenciales desde variables de entorno (Hostinger) o config.json (local)
+let fileConfig = {};
+try { fileConfig = require('./config.json'); } catch { /* ok, usamos env vars */ }
+
+const config = {
+  db: {
+    host:     process.env.DB_HOST     || fileConfig.db?.host     || 'localhost',
+    user:     process.env.DB_USER     || fileConfig.db?.user     || 'root',
+    password: process.env.DB_PASSWORD || fileConfig.db?.password || '',
+    database: process.env.DB_NAME     || fileConfig.db?.database || 'paolitas_pos',
+    charset:  'utf8mb4',
+    timezone: process.env.TIMEZONE    || fileConfig.db?.timezone || '+00:00',
+  },
+  port:      parseInt(process.env.PORT)       || fileConfig.port      || 3000,
+  jwtSecret: process.env.JWT_SECRET           || fileConfig.jwtSecret,
+};
+
+const JWT_SECRET = config.jwtSecret;
+if (!JWT_SECRET) {
+  console.error('ERROR: JWT_SECRET no configurado. Agrega la variable de entorno JWT_SECRET.');
   process.exit(1);
 }
 
 const app = express();
-const JWT_SECRET = config.jwtSecret;
-if (!JWT_SECRET || JWT_SECRET === 'cambia-esto-por-algo-secreto-paolitas-2026') {
-  console.error('ERROR: Debes cambiar jwtSecret en config.json por un valor secreto único.');
-  process.exit(1);
-}
 const upload = multer({ dest: '/tmp/uploads/' });
 
 app.use(express.json({ limit: '10mb' }));
@@ -471,9 +481,14 @@ app.get('/api/export/excel', auth, async (req, res) => {
 });
 
 // ===== STATIC =====
-app.use(express.static(path.join(__dirname, 'public')));
-app.get('/{*splat}', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+// Sirve el build de Next.js (generado por `npm run build` → carpeta out/)
+const staticDir = fs.existsSync(path.join(__dirname, 'out'))
+  ? path.join(__dirname, 'out')
+  : path.join(__dirname, 'public');
+
+app.use(express.static(staticDir));
+app.get('/{*splat}', (req, res) => res.sendFile(path.join(staticDir, 'index.html')));
 
 initDB().then(() => {
-  app.listen(config.port || 3000, () => console.log(`Paolitas POS en puerto ${config.port || 3000}`));
-}).catch(err => { console.error('Error DB:', err); process.exit(1); });
+  app.listen(config.port, () => console.log(`Paolitas POS corriendo en puerto ${config.port}`));
+}).catch(err => { console.error('Error conectando a la DB:', err.message); process.exit(1); });
