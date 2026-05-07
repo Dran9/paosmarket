@@ -1,0 +1,11 @@
+{
+  "db": {
+    "host": "localhost",
+    "user": "TU_USER_MYSQL",
+    "password": "TU_PASSWORD_MYSQL",
+    "database": "TU_DATABASE_MYSQL",
+    "charset": "utf8mb4"
+  },
+  "port": 3000,
+  "jwtSecret": "cambia-esto-por-algo-secreto-paolitas-2026"
+}
