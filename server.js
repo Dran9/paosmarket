@@ -35,24 +35,6 @@ const upload = multer({ dest: '/tmp/uploads/' });
 
 app.use(express.json({ limit: '10mb' }));
 
-// CORS – permite al frontend estático llamar al API
-const CORS_ORIGINS = [
-  process.env.FRONTEND_URL || 'https://linen-falcon-443110.hostingersite.com',
-  'http://localhost:3000',
-  'http://localhost:3001',
-].filter(Boolean);
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  if (origin && CORS_ORIGINS.includes(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-    res.setHeader('Vary', 'Origin');
-  }
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
-  if (req.method === 'OPTIONS') return res.status(204).end();
-  next();
-});
-
 let pool;
 
 async function initDB() {
