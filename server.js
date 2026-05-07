@@ -24,10 +24,10 @@ const config = {
   jwtSecret: process.env.JWT_SECRET           || fileConfig.jwtSecret,
 };
 
-const JWT_SECRET = config.jwtSecret;
-if (!JWT_SECRET) {
-  console.error('ERROR: JWT_SECRET no configurado. Agrega la variable de entorno JWT_SECRET.');
-  process.exit(1);
+const crypto = require('crypto');
+const JWT_SECRET = config.jwtSecret || crypto.randomBytes(32).toString('hex');
+if (!config.jwtSecret) {
+  console.warn('AVISO: JWT_SECRET no configurado — usando clave aleatoria temporal (tokens inválidos al reiniciar).');
 }
 
 const app = express();
@@ -582,6 +582,12 @@ const staticDir = fs.existsSync(path.join(__dirname, 'out'))
 app.use(express.static(staticDir));
 app.get('/{*splat}', (req, res) => res.sendFile(path.join(staticDir, 'index.html')));
 
-initDB().then(() => {
-  app.listen(config.port, () => console.log(`Paolitas POS corriendo en puerto ${config.port}`));
-}).catch(err => { console.error('Error conectando a la DB:', err.message); process.exit(1); });
+// Health check (sin auth) — útil para verificar que el servidor está corriendo
+app.get('/api/health', (req, res) => {
+  res.json({ ok: true, db: !!pool, time: new Date().toISOString(), version: '2.0' });
+});
+
+app.listen(config.port, () => {
+  console.log(`Paolitas POS iniciado en puerto ${config.port}`);
+  initDB().catch(err => console.error('Error conectando a la DB:', err.message));
+});

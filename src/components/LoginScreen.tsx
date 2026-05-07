@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { useStore } from '@/lib/store';
+import { USERS } from '@/lib/data';
 import { Store } from 'lucide-react';
 
 export default function LoginScreen() {
@@ -9,7 +10,9 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
-  const activeUsers = employees.filter(e => e.active !== false);
+  const fromStore = employees.filter(e => e.active !== false);
+  // Mientras la API no ha cargado, mostrar usuarios hardcodeados como fallback
+  const activeUsers = fromStore.length > 0 ? fromStore : USERS.filter(u => u.active !== false);
 
   const handleUserClick = (id: string) => {
     setSelected(id);
