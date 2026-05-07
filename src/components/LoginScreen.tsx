@@ -41,7 +41,8 @@ export default function LoginScreen() {
           <Store size={36} />
         </div>
         <h2 className="text-3xl font-extrabold mb-1">{settings.businessName}</h2>
-        <p className="text-white/50 mb-8 text-sm">{settings.businessTagline}</p>
+        <p className="text-white/50 mb-2 text-sm">{settings.businessTagline}</p>
+        <p className="text-amber-400 mb-6 text-xs font-mono">v2.1 · DB MODE</p>
 
         {!selected ? (
           <>

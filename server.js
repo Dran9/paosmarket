@@ -36,6 +36,7 @@ const upload = multer({ dest: '/tmp/uploads/' });
 app.use(express.json({ limit: '10mb' }));
 
 let pool;
+let dbReady = false;
 
 async function initDB() {
   pool = mysql.createPool({ ...config.db, waitForConnections: true, connectionLimit: 10, queueLimit: 0 });
@@ -173,6 +174,7 @@ async function initDB() {
 
   await seed(conn);
   conn.release();
+  dbReady = true;
 }
 
 async function seed(conn) {
@@ -573,21 +575,53 @@ app.get('/api/export/excel', auth, async (req, res) => {
   res.send(buf);
 });
 
-// ===== STATIC =====
-// Sirve el build de Next.js (generado por `npm run build` → carpeta out/)
-const staticDir = fs.existsSync(path.join(__dirname, 'out'))
-  ? path.join(__dirname, 'out')
-  : path.join(__dirname, 'public');
+// ===== STATIC FILES =====
+const staticDir = path.join(__dirname, 'out');
+const hasOut = fs.existsSync(staticDir);
+const indexHtml = path.join(staticDir, 'index.html');
+const hasIndex = fs.existsSync(indexHtml);
+const SERVER_VERSION = '2.1.0-' + new Date().toISOString().slice(0, 16);
 
-app.use(express.static(staticDir));
-app.get('/{*splat}', (req, res) => res.sendFile(path.join(staticDir, 'index.html')));
-
-// Health check (sin auth) — útil para verificar que el servidor está corriendo
+// Health check (sin auth) — DEBE ir antes del catch-all
 app.get('/api/health', (req, res) => {
-  res.json({ ok: true, db: !!pool, time: new Date().toISOString(), version: '2.0' });
+  res.json({
+    ok: true,
+    db: dbReady,
+    time: new Date().toISOString(),
+    version: SERVER_VERSION,
+    hasOut,
+    hasIndex,
+    nodeVersion: process.version,
+  });
 });
 
+// 404 explícito para /api/* no encontradas (evita servir index.html para rutas API)
+app.use('/api', (req, res) => {
+  res.status(404).json({ error: 'Endpoint no encontrado: ' + req.path });
+});
+
+if (hasOut) {
+  app.use(express.static(staticDir));
+  app.use((req, res, next) => {
+    if (req.method !== 'GET') return next();
+    if (!hasIndex) return res.status(503).send('index.html no encontrado en out/');
+    res.sendFile(indexHtml);
+  });
+} else {
+  app.use((req, res) => {
+    res.status(503).send('Build no encontrado. La carpeta out/ no existe.');
+  });
+}
+
 app.listen(config.port, () => {
-  console.log(`Paolitas POS iniciado en puerto ${config.port}`);
-  initDB().catch(err => console.error('Error conectando a la DB:', err.message));
+  console.log(`========================================`);
+  console.log(`Paolitas POS ${SERVER_VERSION}`);
+  console.log(`Puerto: ${config.port}`);
+  console.log(`Node: ${process.version}`);
+  console.log(`Static dir: ${hasOut ? staticDir : 'NO BUILD ENCONTRADO'}`);
+  console.log(`index.html: ${hasIndex ? 'SI' : 'NO'}`);
+  console.log(`========================================`);
+  initDB()
+    .then(() => console.log('[server] DB conectada y lista'))
+    .catch(err => console.error('[server] Error DB:', err.message));
 });
