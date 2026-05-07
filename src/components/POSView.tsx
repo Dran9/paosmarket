@@ -1,7 +1,7 @@
 'use client';
 import { useState, useRef, useEffect, useCallback, type ElementType } from 'react';
 import { useStore } from '@/lib/store';
-import { CATEGORIES, CAT_COLORS, DRIVERS, type Driver } from '@/lib/data';
+import { CATEGORIES, CAT_COLORS } from '@/lib/data';
 import { CategoryIcon } from '@/lib/icons';
 import { fmt, round2, calcTax, getStockStatus } from '@/lib/utils';
 import {
@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 
 export default function POSView() {
-  const { products, cart, saleType, setSaleType, posCategory, setPosCategory, posSearch, setPosSearch,
+  const { products, cart, drivers, saleType, setSaleType, posCategory, setPosCategory, posSearch, setPosSearch,
     addToCart, updateCartQty, removeFromCart, clearCart, processPayment, processDelivery, currentUser } = useStore();
   const [showPayment, setShowPayment] = useState(false);
   const [showDelivery, setShowDelivery] = useState(false);
@@ -59,7 +59,11 @@ export default function POSView() {
     return () => window.removeEventListener('keydown', handleBarcode);
   }, [handleBarcode]);
 
-  const doPayment = () => {
+  const [paying, setPaying] = useState(false);
+  const [delivering, setDelivering] = useState(false);
+  const [payError, setPayError] = useState('');
+
+  const doPayment = async () => {
     const total = cartTotal;
     let cr = total, ca = 0, qa = 0;
     if (payMethod === 'Efectivo') {
@@ -72,18 +76,28 @@ export default function POSView() {
       if (Math.abs(ca + qa - total) > 0.01) return;
       cr = total;
     }
-    const tx = processPayment(payMethod, cr, ca, qa);
-    setShowPayment(false);
-    setShowReceipt(tx);
-    setCashIn(''); setMixtoCash(0); setPayMethod('Efectivo');
+    setPaying(true); setPayError('');
+    try {
+      const tx = await processPayment(payMethod, cr, ca, qa);
+      setShowPayment(false);
+      setShowReceipt(tx);
+      setCashIn(''); setMixtoCash(0); setPayMethod('Efectivo');
+    } catch (e: any) {
+      setPayError(e.message || 'Error al procesar pago');
+    } finally { setPaying(false); }
   };
 
-  const doDelivery = () => {
+  const doDelivery = async () => {
     if (!dlClient.name || !dlClient.addr || !dlDriver) return;
-    processDelivery(dlClient, dlTransport, dlCost, dlDriver);
-    setShowDelivery(false);
-    setDlClient({ name: '', phone: '', zone: '', addr: '', notes: '' });
-    setDlDriver(null); setDlCost(15); setDlTransport('incluido');
+    setDelivering(true);
+    try {
+      await processDelivery(dlClient, dlTransport, dlCost, dlDriver);
+      setShowDelivery(false);
+      setDlClient({ name: '', phone: '', zone: '', addr: '', notes: '' });
+      setDlDriver(null); setDlCost(15); setDlTransport('incluido');
+    } catch (e: any) {
+      alert('Error: ' + (e.message || 'No se pudo crear el pedido'));
+    } finally { setDelivering(false); }
   };
 
   return (
@@ -255,10 +269,11 @@ export default function POSView() {
                 className="w-full p-2 text-lg font-bold text-center border rounded-lg bg-white" />
             </div>
           )}
+          {payError && <p className="text-red-500 text-sm text-center mt-3">{payError}</p>}
           <div className="flex justify-end gap-2 mt-5">
             <button onClick={() => setShowPayment(false)} className="px-5 py-2.5 text-sm font-semibold border border-slate-200 rounded-lg hover:bg-slate-50">Cancelar</button>
-            <button onClick={doPayment} className="flex items-center gap-1.5 px-6 py-2.5 text-sm font-bold bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg">
-              <Check size={14} /> Confirmar
+            <button onClick={doPayment} disabled={paying} className="flex items-center gap-1.5 px-6 py-2.5 text-sm font-bold bg-emerald-500 hover:bg-emerald-600 disabled:opacity-60 text-white rounded-lg">
+              <Check size={14} /> {paying ? 'Procesando...' : 'Confirmar'}
             </button>
           </div>
         </Modal>
@@ -290,7 +305,7 @@ export default function POSView() {
           ))}
           <Field label="Costo Transporte (Bs)" value={String(dlCost)} onChange={v => setDlCost(parseFloat(v) || 0)} type="number" />
           <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-2 mt-3">Chofer</label>
-          {DRIVERS.map(d => (
+          {drivers.map(d => (
             <div key={d.id} onClick={() => setDlDriver(d.id)}
               className={`flex items-center gap-3 p-3 border-2 rounded-lg cursor-pointer mb-2 transition-all ${dlDriver === d.id ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 hover:border-indigo-300'}`}>
               <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-500 flex items-center justify-center flex-shrink-0">
@@ -302,8 +317,8 @@ export default function POSView() {
           ))}
           <div className="flex justify-end gap-2 mt-5">
             <button onClick={() => setShowDelivery(false)} className="px-5 py-2.5 text-sm font-semibold border border-slate-200 rounded-lg">Cancelar</button>
-            <button onClick={doDelivery} className="flex items-center gap-1.5 px-6 py-2.5 text-sm font-bold bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg">
-              <Check size={14} /> Confirmar Pedido
+            <button onClick={doDelivery} disabled={delivering} className="flex items-center gap-1.5 px-6 py-2.5 text-sm font-bold bg-emerald-500 hover:bg-emerald-600 disabled:opacity-60 text-white rounded-lg">
+              <Check size={14} /> {delivering ? 'Enviando...' : 'Confirmar Pedido'}
             </button>
           </div>
         </Modal>

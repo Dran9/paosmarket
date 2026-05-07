@@ -35,6 +35,24 @@ const upload = multer({ dest: '/tmp/uploads/' });
 
 app.use(express.json({ limit: '10mb' }));
 
+// CORS – permite al frontend estático llamar al API
+const CORS_ORIGINS = [
+  process.env.FRONTEND_URL || 'https://linen-falcon-443110.hostingersite.com',
+  'http://localhost:3000',
+  'http://localhost:3001',
+].filter(Boolean);
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin && CORS_ORIGINS.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+  }
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
+  if (req.method === 'OPTIONS') return res.status(204).end();
+  next();
+});
+
 let pool;
 
 async function initDB() {
@@ -49,8 +67,25 @@ async function initDB() {
     avatar VARCHAR(10) DEFAULT '',
     color VARCHAR(20) DEFAULT '#6366f1',
     can_dashboard TINYINT(1) DEFAULT 0,
-    active TINYINT(1) DEFAULT 1
+    active TINYINT(1) DEFAULT 1,
+    first_name VARCHAR(100) DEFAULT NULL,
+    last_name VARCHAR(100) DEFAULT NULL,
+    phone VARCHAR(30) DEFAULT NULL,
+    document_number VARCHAR(30) DEFAULT NULL,
+    address VARCHAR(255) DEFAULT NULL
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+  // Migration: add extra columns if table already existed without them
+  for (const colDef of [
+    'first_name VARCHAR(100) DEFAULT NULL',
+    'last_name VARCHAR(100) DEFAULT NULL',
+    'phone VARCHAR(30) DEFAULT NULL',
+    'document_number VARCHAR(30) DEFAULT NULL',
+    'address VARCHAR(255) DEFAULT NULL',
+  ]) {
+    const col = colDef.split(' ')[0];
+    try { await conn.execute(`ALTER TABLE users ADD COLUMN ${colDef}`); }
+    catch { /* column already exists */ }
+  }
 
   await conn.execute(`CREATE TABLE IF NOT EXISTS products (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -296,7 +331,7 @@ app.post('/api/transactions', auth, async (req, res) => {
     const change_amount = method === 'Efectivo' ? r2((cash_received || 0) - total) : 0;
     const id = 'T-' + await nextId('ticket');
 
-    await conn.execute(`INSERT INTO transactions (id,date,subtotal,tax,total,method,cash_received,cash_amount,qr_amount,change_amount,user_id,attended_by,order_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+    await conn.execute(`INSERT INTO transactions (id,date,subtotal,tax,total,method,cash_received,cash_amount,qr_amount,change_amount,user_id,attended_by,order_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [id, new Date(), subtotal, tax, total, method, cash_received||total, cash_amount||0, qr_amount||0, change_amount, req.user.id, attended_by||'', order_id||null]);
 
     for (const i of items) {
@@ -350,8 +385,17 @@ app.delete('/api/expenses/:id', auth, async (req, res) => {
 
 // ===== ORDERS =====
 app.get('/api/orders', auth, async (req, res) => {
-  const [rows] = await pool.execute('SELECT * FROM orders ORDER BY date DESC');
-  res.json(rows);
+  const [orders] = await pool.execute('SELECT * FROM orders ORDER BY date DESC');
+  if (!orders.length) return res.json([]);
+  const ids = orders.map(o => o.id);
+  const placeholders = ids.map(() => '?').join(',');
+  const [items] = await pool.execute(`SELECT * FROM order_items WHERE order_id IN (${placeholders})`, ids);
+  const itemsMap = {};
+  items.forEach(item => {
+    if (!itemsMap[item.order_id]) itemsMap[item.order_id] = [];
+    itemsMap[item.order_id].push({ productId: item.product_id, name: item.product_name, price: +item.price, cost: +item.cost, qty: item.qty });
+  });
+  res.json(orders.map(o => ({ ...o, items: itemsMap[o.id] || [] })));
 });
 
 app.post('/api/orders', auth, async (req, res) => {
@@ -390,7 +434,7 @@ app.put('/api/orders/:id/status', auth, async (req, res) => {
 
     if (status === 'entregado') {
       const id = 'T-' + await nextId('ticket');
-      await conn.execute(`INSERT INTO transactions (id,date,subtotal,tax,total,method,cash_received,cash_amount,qr_amount,change_amount,user_id,attended_by,order_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+      await conn.execute(`INSERT INTO transactions (id,date,subtotal,tax,total,method,cash_received,cash_amount,qr_amount,change_amount,user_id,attended_by,order_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [id, new Date(), order.subtotal, order.tax, order.total, 'QR', order.total, 0, order.total, 0, order.user_id, order.attended_by, order.id]);
 
       const [items] = await conn.execute('SELECT * FROM order_items WHERE order_id = ?', [req.params.id]);
@@ -410,6 +454,69 @@ app.get('/api/drivers', auth, async (req, res) => {
   res.json(rows);
 });
 
+// ===== USERS =====
+function mapUser(u) {
+  return {
+    id: u.id, name: u.name, role: u.role, avatar: u.avatar, color: u.color,
+    canDashboard: !!u.can_dashboard, active: !!u.active,
+    firstName: u.first_name || '', lastName: u.last_name || '',
+    phone: u.phone || '', documentNumber: u.document_number || '', address: u.address || '',
+  };
+}
+
+app.get('/api/users', auth, async (req, res) => {
+  try {
+    const [rows] = await pool.execute('SELECT * FROM users ORDER BY role DESC, name');
+    res.json(rows.map(mapUser));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/users', auth, async (req, res) => {
+  if (req.user.role !== 'owner') return res.status(403).json({ error: 'Solo el owner puede crear usuarios' });
+  try {
+    const { id, name, password, role, avatar, color, canDashboard, firstName, lastName, phone, documentNumber, address } = req.body;
+    if (!id || !name) return res.status(400).json({ error: 'id y name son requeridos' });
+    const hash = await bcrypt.hash(password || 'temporal123', 10);
+    await pool.execute(
+      'INSERT INTO users (id,name,password_hash,role,avatar,color,can_dashboard,first_name,last_name,phone,document_number,address) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
+      [id, name, hash, role || 'vendedora', avatar || name[0], color || '#6366f1', canDashboard ? 1 : 0, firstName || '', lastName || '', phone || '', documentNumber || '', address || '']
+    );
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/users/:id', auth, async (req, res) => {
+  if (req.user.role !== 'owner' && req.user.id !== req.params.id) return res.status(403).json({ error: 'No autorizado' });
+  try {
+    const { name, role, avatar, color, canDashboard, active, password, firstName, lastName, phone, documentNumber, address } = req.body;
+    const fields = []; const vals = [];
+    if (name !== undefined)                              { fields.push('name = ?');            vals.push(name); }
+    if (role !== undefined && req.user.role === 'owner') { fields.push('role = ?');            vals.push(role); }
+    if (avatar !== undefined)                            { fields.push('avatar = ?');          vals.push(avatar); }
+    if (color !== undefined)                             { fields.push('color = ?');           vals.push(color); }
+    if (canDashboard !== undefined && req.user.role === 'owner') { fields.push('can_dashboard = ?'); vals.push(canDashboard ? 1 : 0); }
+    if (active !== undefined && req.user.role === 'owner')       { fields.push('active = ?');        vals.push(active ? 1 : 0); }
+    if (firstName !== undefined)                         { fields.push('first_name = ?');      vals.push(firstName); }
+    if (lastName !== undefined)                          { fields.push('last_name = ?');       vals.push(lastName); }
+    if (phone !== undefined)                             { fields.push('phone = ?');           vals.push(phone); }
+    if (documentNumber !== undefined)                    { fields.push('document_number = ?'); vals.push(documentNumber); }
+    if (address !== undefined)                           { fields.push('address = ?');         vals.push(address); }
+    if (password)                                        { fields.push('password_hash = ?');   vals.push(await bcrypt.hash(password, 10)); }
+    if (!fields.length) return res.json({ ok: true });
+    vals.push(req.params.id);
+    await pool.execute(`UPDATE users SET ${fields.join(', ')} WHERE id = ?`, vals);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/users/:id', auth, async (req, res) => {
+  if (req.user.role !== 'owner') return res.status(403).json({ error: 'Solo el owner puede eliminar usuarios' });
+  try {
+    await pool.execute('UPDATE users SET active = 0 WHERE id = ?', [req.params.id]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ===== DASHBOARD =====
 app.get('/api/dashboard', auth, async (req, res) => {
   const { from, to } = req.query;
@@ -427,9 +534,13 @@ app.get('/api/dashboard', auth, async (req, res) => {
 
   const [lowStock] = await pool.execute('SELECT COUNT(*) as c FROM products WHERE stock <= 10 AND active = 1');
 
-  const totalCOGS = r2(txStats.totalSubtotal - txStats.totalTax) * 0.45;
-  const grossProfit = r2(txStats.totalRevenue - txStats.totalTax - totalCOGS);
-  const netProfit = r2(grossProfit - expStats.totalExpenses);
+  const [[cogsResult]] = await pool.execute(
+    'SELECT COALESCE(SUM(ti.cost * ti.qty), 0) as totalCOGS FROM transaction_items ti JOIN transactions t ON ti.transaction_id = t.id WHERE t.date >= ? AND t.date <= ?',
+    [startDate, endDate]
+  );
+  const totalCOGS = r2(+cogsResult.totalCOGS);
+  const grossProfit = r2(+txStats.totalRevenue - +txStats.totalTax - totalCOGS);
+  const netProfit = r2(grossProfit - +expStats.totalExpenses);
 
   res.json({ ...txStats, ...expStats, totalCOGS, grossProfit, netProfit, lowStock: lowStock[0].c, byUser, topProducts: items, byMethod });
 });

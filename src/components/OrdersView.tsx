@@ -1,6 +1,5 @@
 'use client';
 import { useStore } from '@/lib/store';
-import { DRIVERS } from '@/lib/data';
 import { fmt, fmtDateTime } from '@/lib/utils';
 
 const STATUS: Record<string, { label: string; cls: string; icon: string }> = {
@@ -12,7 +11,7 @@ const STATUS: Record<string, { label: string; cls: string; icon: string }> = {
 };
 
 export default function OrdersView() {
-  const { orders, updateOrderStatus } = useStore();
+  const { orders, drivers, updateOrderStatus } = useStore();
   const pending = orders.filter(o => o.status === 'pendiente').length;
   const inProgress = orders.filter(o => ['preparando', 'en_camino'].includes(o.status)).length;
   const delivered = orders.filter(o => o.status === 'entregado').length;
@@ -58,7 +57,7 @@ export default function OrdersView() {
               <tbody>
                 {orders.map(o => {
                   const st = STATUS[o.status] || STATUS.pendiente;
-                  const driver = o.driverId ? DRIVERS.find(d => d.id === o.driverId) : null;
+                  const driver = o.driverId ? drivers.find(d => d.id === o.driverId) : null;
                   const tLabel = o.transportType === 'incluido' ? `Incluido Bs ${o.transportCost}` : o.transportType === 'pago_entrega' ? 'Pago entrega' : '-';
                   return (
                     <tr key={o.id} className="border-t border-slate-100 hover:bg-indigo-50/30">
