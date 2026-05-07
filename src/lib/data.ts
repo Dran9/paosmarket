@@ -71,12 +71,52 @@ export interface User {
   avatar: string;
   color: string;
   canDashboard: boolean;
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+  documentNumber?: string;
+  address?: string;
+  active?: boolean;
 }
 
 export const USERS: User[] = [
-  { id:'paola', name:'Sra. Paola', role:'owner', avatar:'P', color:'#ec4899', canDashboard:true },
-  { id:'esperancita', name:'Esperancita', role:'vendedora', avatar:'E', color:'#f59e0b', canDashboard:false }
+  { id:'paola', name:'Sra. Paola', firstName:'Paola', lastName:'', role:'owner', avatar:'P', color:'#ec4899', canDashboard:true, active:true },
+  { id:'esperancita', name:'Esperancita', firstName:'Esperanza', lastName:'', role:'vendedora', avatar:'E', color:'#f59e0b', canDashboard:false, active:true }
 ];
+
+export interface AppSettings {
+  businessName: string;
+  businessTagline: string;
+  businessNIT: string;
+  businessPhone: string;
+  businessAddress: string;
+  businessCity: string;
+  businessEmail: string;
+  currency: string;
+  currencySymbol: string;
+  timezone: string;
+  taxRate: number;
+  ticketPrefix: string;
+  orderPrefix: string;
+  lowStockThreshold: number;
+}
+
+export const DEFAULT_SETTINGS: AppSettings = {
+  businessName: "Paolita's Market",
+  businessTagline: 'Tu tienda de confianza',
+  businessNIT: '0102XXXXXXXX',
+  businessPhone: '',
+  businessAddress: '',
+  businessCity: 'La Paz',
+  businessEmail: '',
+  currency: 'BOB',
+  currencySymbol: 'Bs.',
+  timezone: 'America/La_Paz',
+  taxRate: 13,
+  ticketPrefix: 'T-',
+  orderPrefix: 'PED-',
+  lowStockThreshold: 5,
+};
 
 export interface Driver {
   id: string;

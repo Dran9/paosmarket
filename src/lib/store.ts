@@ -1,7 +1,7 @@
 'use client';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { PRODUCTS, DRIVERS, type Product, type User, type Driver } from './data';
+import { PRODUCTS, DRIVERS, USERS, DEFAULT_SETTINGS, type Product, type User, type Driver, type AppSettings } from './data';
 import { round2, calcTax, calcTotal, rand } from './utils';
 
 export interface CartItem {
@@ -64,6 +64,8 @@ interface StoreState {
   transactions: Transaction[];
   expenses: Expense[];
   orders: Order[];
+  employees: User[];
+  settings: AppSettings;
   currentUser: User | null;
   currentView: string;
   saleType: 'site' | 'delivery';
@@ -76,6 +78,10 @@ interface StoreState {
   login: (user: User) => void;
   logout: () => void;
   setView: (view: string) => void;
+  updateSettings: (updates: Partial<AppSettings>) => void;
+  addEmployee: (e: Omit<User, 'id'>) => void;
+  updateEmployee: (id: string, updates: Partial<User>) => void;
+  deleteEmployee: (id: string) => void;
   setSaleType: (type: 'site' | 'delivery') => void;
   setPosCategory: (cat: string) => void;
   setPosSearch: (s: string) => void;
@@ -109,6 +115,8 @@ export const useStore = create<StoreState>()(
       transactions: [],
       expenses: [],
       orders: [],
+      employees: JSON.parse(JSON.stringify(USERS)),
+      settings: { ...DEFAULT_SETTINGS },
       currentUser: null,
       currentView: 'pos',
       saleType: 'site',
@@ -121,6 +129,18 @@ export const useStore = create<StoreState>()(
       login: (user) => set({ currentUser: user }),
       logout: () => set({ currentUser: null }),
       setView: (view) => set({ currentView: view }),
+      updateSettings: (updates) => set({ settings: { ...get().settings, ...updates } }),
+      addEmployee: (e) => {
+        const id = e.firstName
+          ? (e.firstName.toLowerCase().replace(/\s+/g, '') + Date.now().toString(36))
+          : ('emp-' + Date.now().toString(36));
+        set({ employees: [...get().employees, { ...e, id, active: true }] });
+      },
+      updateEmployee: (id, updates) => {
+        set({ employees: get().employees.map(e => e.id === id ? { ...e, ...updates } : e) });
+        if (get().currentUser?.id === id) set({ currentUser: { ...get().currentUser!, ...updates } });
+      },
+      deleteEmployee: (id) => set({ employees: get().employees.filter(e => e.id !== id) }),
       setSaleType: (type) => set({ saleType: type }),
       setPosCategory: (cat) => set({ posCategory: cat }),
       setPosSearch: (s) => set({ posSearch: s }),
