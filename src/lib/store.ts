@@ -172,7 +172,7 @@ export const useStore = create<StoreState>()(
             api.transactions.list({ limit: '200' }),
           ]);
           set({
-            products: products.map((p: any) => ({ ...p, id: Number(p.id), price: +p.price, cost: +p.cost, stock: +p.stock })),
+            products: products.map((p: any) => ({ ...p, id: Number(p.id), price: +p.price, cost: +p.cost, stock: +p.stock, brand: p.brand || '' })),
             drivers,
             orders: orders.map(mapOrder),
             expenses: expenses.map((e: any) => ({ ...e, amount: +e.amount })),

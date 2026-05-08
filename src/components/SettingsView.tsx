@@ -62,8 +62,10 @@ export default function SettingsView() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<Omit<User, 'id'>>({ ...emptyEmployee });
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [empSaving, setEmpSaving] = useState(false);
+  const [empError, setEmpError] = useState('');
 
-  const openNew = () => { setForm({ ...emptyEmployee }); setEditingId(null); setShowModal(true); };
+  const openNew = () => { setForm({ ...emptyEmployee }); setEditingId(null); setEmpError(''); setShowModal(true); };
   const openEdit = (emp: User) => {
     setForm({
       name: emp.name, firstName: emp.firstName || '', lastName: emp.lastName || '',
@@ -71,7 +73,7 @@ export default function SettingsView() {
       address: emp.address || '', role: emp.role, avatar: emp.avatar,
       color: emp.color, canDashboard: emp.canDashboard, active: emp.active ?? true,
     });
-    setEditingId(emp.id); setShowModal(true);
+    setEditingId(emp.id); setEmpError(''); setShowModal(true);
   };
 
   const handleFormChange = (key: keyof typeof form, val: unknown) => {
@@ -87,11 +89,23 @@ export default function SettingsView() {
     });
   };
 
-  const saveEmployee = () => {
-    if (!form.firstName?.trim()) return;
-    if (editingId) updateEmployee(editingId, form);
-    else addEmployee(form);
-    setShowModal(false);
+  const saveEmployee = async () => {
+    if (!form.firstName?.trim()) {
+      setEmpError('El nombre es obligatorio');
+      return;
+    }
+    setEmpSaving(true);
+    setEmpError('');
+    try {
+      if (editingId) await updateEmployee(editingId, form);
+      else await addEmployee(form);
+      setShowModal(false);
+    } catch (err: any) {
+      console.error('Error guardando empleado:', err);
+      setEmpError(err?.message || 'Error al guardar empleado. Verifica tu sesión y reintenta.');
+    } finally {
+      setEmpSaving(false);
+    }
   };
 
   const TABS = [
@@ -361,15 +375,20 @@ export default function SettingsView() {
                 </Field>
               </div>
             </div>
+            {empError && (
+              <div className="mx-6 mb-3 p-2.5 rounded-lg bg-red-50 border border-red-200 text-red-600 text-xs font-semibold">
+                {empError}
+              </div>
+            )}
             <div className="flex justify-end gap-2 p-6 pt-0">
-              <button onClick={() => setShowModal(false)}
-                className="px-4 py-2 rounded-lg text-sm font-semibold text-slate-600 hover:bg-slate-100 transition-all">
+              <button disabled={empSaving} onClick={() => setShowModal(false)}
+                className="px-4 py-2 rounded-lg text-sm font-semibold text-slate-600 hover:bg-slate-100 transition-all disabled:opacity-50">
                 Cancelar
               </button>
-              <button onClick={saveEmployee} disabled={!form.firstName?.trim()}
+              <button onClick={saveEmployee} disabled={!form.firstName?.trim() || empSaving}
                 className="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold bg-indigo-600 hover:bg-indigo-700 text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed">
                 <Save size={13} />
-                {editingId ? 'Guardar cambios' : 'Agregar empleado'}
+                {empSaving ? 'Guardando...' : (editingId ? 'Guardar cambios' : 'Agregar empleado')}
               </button>
             </div>
           </div>
@@ -384,9 +403,9 @@ const inp = 'w-full px-3 py-2 rounded-lg border border-slate-200 text-sm text-sl
 function Field({ label, children, span, icon }: { label: string; children: React.ReactNode; span?: boolean; icon?: React.ReactNode }) {
   return (
     <div className={span ? 'col-span-2' : ''}>
-      <label className="flex items-center gap-1 text-xs font-semibold text-slate-500 mb-1">
+      <div className="flex items-center gap-1 text-xs font-semibold text-slate-500 mb-1">
         {icon}{label}
-      </label>
+      </div>
       {children}
     </div>
   );

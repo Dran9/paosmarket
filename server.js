@@ -73,6 +73,7 @@ async function initDB() {
   await conn.execute(`CREATE TABLE IF NOT EXISTS products (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(200) NOT NULL,
+    brand VARCHAR(100) DEFAULT '',
     category VARCHAR(50) NOT NULL,
     barcode VARCHAR(50) DEFAULT '',
     price DECIMAL(10,2) NOT NULL DEFAULT 0,
@@ -83,6 +84,8 @@ async function initDB() {
     INDEX idx_barcode (barcode),
     INDEX idx_category (category)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+  try { await conn.execute("ALTER TABLE products ADD COLUMN brand VARCHAR(100) DEFAULT ''"); }
+  catch { /* column already exists */ }
 
   await conn.execute(`CREATE TABLE IF NOT EXISTS transactions (
     id VARCHAR(20) PRIMARY KEY,
@@ -278,7 +281,7 @@ app.get('/api/products', auth, async (req, res) => {
 
 app.put('/api/products/:id', auth, async (req, res) => {
   const fields = []; const vals = [];
-  for (const k of ['name','category','barcode','price','cost','stock','unit']) {
+  for (const k of ['name','brand','category','barcode','price','cost','stock','unit']) {
     if (req.body[k] !== undefined) { fields.push(`${k} = ?`); vals.push(req.body[k]); }
   }
   if (!fields.length) return res.json({ ok: true });
@@ -288,8 +291,8 @@ app.put('/api/products/:id', auth, async (req, res) => {
 });
 
 app.post('/api/products', auth, async (req, res) => {
-  const { name, category, barcode, price, cost, stock, unit } = req.body;
-  const [r] = await pool.execute('INSERT INTO products (name,category,barcode,price,cost,stock,unit) VALUES (?,?,?,?,?,?,?)', [name, category, barcode||'', price, cost, stock||0, unit||'pza']);
+  const { name, brand, category, barcode, price, cost, stock, unit } = req.body;
+  const [r] = await pool.execute('INSERT INTO products (name,brand,category,barcode,price,cost,stock,unit) VALUES (?,?,?,?,?,?,?,?)', [name, brand||'', category, barcode||'', price, cost, stock||0, unit||'pza']);
   res.json({ id: r.insertId });
 });
 

@@ -1,4 +1,5 @@
 'use client';
+import { useMemo } from 'react';
 import {
   ShoppingCart, Truck, BarChart3, Calculator, Package, Settings,
   Store, LogOut,
@@ -33,11 +34,12 @@ export default function AppShell() {
     return true;
   };
 
-  const views: Record<string, React.ReactNode> = {
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const views = useMemo<Record<string, React.ReactNode>>(() => ({
     pos: <POSView />, orders: <OrdersView />, dashboard: <DashboardView />,
     accounting: <AccountingView />, inventory: <InventoryView />,
     settings: <SettingsView />,
-  };
+  }), []);
 
   return (
     <div className="flex h-screen">

@@ -13,6 +13,7 @@ export const CAT_ICONS: Record<string,string> = {
 export interface Product {
   id: number;
   name: string;
+  brand?: string;
   category: Category | string;
   price: number;
   cost: number;

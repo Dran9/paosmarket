@@ -136,7 +136,8 @@ export default function POSView() {
                   style={{ background: CAT_COLORS[p.category] + '22', color: CAT_COLORS[p.category] }}>
                   <CategoryIcon category={p.category} size={18} />
                 </div>
-                <div className="text-xs font-semibold leading-tight mb-1 line-clamp-2">{p.name}</div>
+                <div className="text-xs font-semibold leading-tight mb-0.5 line-clamp-2">{p.name}</div>
+                {p.brand && <div className="text-[10px] text-slate-400 mb-0.5 truncate w-full">{p.brand}</div>}
                 <div className="text-lg font-extrabold text-indigo-500">{fmt(p.price)}</div>
                 <div className={`text-[10px] mt-1 ${s.barCls.replace('bg-', 'text-').replace('-500', '-500')}`}>{p.stock} {p.unit}s</div>
               </div>

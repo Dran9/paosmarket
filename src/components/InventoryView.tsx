@@ -4,7 +4,7 @@ import { useStore } from '@/lib/store';
 import { CATEGORIES, CAT_COLORS } from '@/lib/data';
 import { CategoryIcon } from '@/lib/icons';
 import { fmt, getStockStatus, round2 } from '@/lib/utils';
-import { Search, FileSpreadsheet, Plus, PlusCircle, Save, Trash2 } from 'lucide-react';
+import { Search, FileSpreadsheet, Plus, PlusCircle, Save, Trash2, Download } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 export default function InventoryView() {
@@ -12,45 +12,68 @@ export default function InventoryView() {
   const [catFilter, setCatFilter] = useState('Todos');
   const [search, setSearch] = useState('');
   const [showNew, setShowNew] = useState(false);
-  const [newP, setNewP] = useState({ name: '', category: 'Abarrotes', barcode: '', price: '', cost: '', stock: '', unit: 'pza' });
+  const [newP, setNewP] = useState({ name: '', brand: '', category: 'Abarrotes', barcode: '', price: '', cost: '', stock: '', unit: 'pza' });
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
 
   const filtered = products.filter(p => {
     const mc = catFilter === 'Todos' || p.category === catFilter;
-    const ms = p.name.toLowerCase().includes(search.toLowerCase()) || (p.barcode && p.barcode.includes(search));
+    const ms = p.name.toLowerCase().includes(search.toLowerCase())
+      || (p.brand && p.brand.toLowerCase().includes(search.toLowerCase()))
+      || (p.barcode && p.barcode.includes(search));
     return mc && ms;
   });
   const totalValue = round2(products.reduce((s, p) => s + p.price * p.stock, 0));
-  const totalCost = round2(products.reduce((s, p) => s + p.cost * p.stock, 0));
-  const lowStock = products.filter(p => p.stock <= 10).length;
+  const totalCost  = round2(products.reduce((s, p) => s + p.cost  * p.stock, 0));
+  const lowStock   = products.filter(p => p.stock <= 10).length;
 
   const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (ev) => {
-      const wb = XLSX.read(ev.target?.result, { type: 'binary' });
-      const ws = wb.Sheets[wb.SheetNames[0]];
+      const wb   = XLSX.read(ev.target?.result, { type: 'binary' });
+      const ws   = wb.Sheets[wb.SheetNames[0]];
       const data = XLSX.utils.sheet_to_json(ws) as any[];
       let imported = 0;
       data.forEach(row => {
         const name = row['Producto'] || row['producto'] || row['Nombre'] || '';
         if (!name) return;
-        const barcode = String(row['Codigo de Barras'] || row['barcode'] || row['Barcode'] || '');
-        const price = parseFloat(row['Precio'] || row['precio'] || row['Price'] || 0);
-        const cost = parseFloat(row['Costo'] || row['costo'] || row['Cost'] || 0);
-        const stock = parseInt(row['Stock'] || row['stock'] || 0);
-        const category = row['Categoria'] || row['categoria'] || 'Abarrotes';
-        const unit = row['Unidad'] || row['unidad'] || 'pza';
+        const brand    = String(row['Marca']            || row['marca']    || row['Brand']    || '');
+        const barcode  = String(row['Codigo de Barras'] || row['barcode']  || row['Barcode']  || '');
+        const price    = parseFloat(row['Precio']       || row['precio']   || row['Price']    || 0);
+        const cost     = parseFloat(row['Costo']        || row['costo']    || row['Cost']     || 0);
+        const stock    = parseInt(  row['Stock']        || row['stock']    || 0);
+        const category = row['Categoria']               || row['categoria']                   || 'Abarrotes';
+        const unit     = row['Unidad']                  || row['unidad']                      || 'pza';
         if (!price) return;
         const existing = barcode ? products.find(p => p.barcode === barcode) : null;
-        if (existing) { updateProduct(existing.id, { name, price, cost, stock, category, unit }); }
-        else { addProduct({ name, category, barcode, price, cost, stock, unit }); }
+        if (existing) { updateProduct(existing.id, { name, brand, price, cost, stock, category, unit }); }
+        else           { addProduct({ name, brand, category, barcode, price, cost, stock, unit }); }
         imported++;
       });
       alert(`${imported} productos importados`);
     };
     reader.readAsBinaryString(file);
+    e.target.value = '';
+  };
+
+  const handleExport = () => {
+    const rows = filtered.map(p => ({
+      'Producto':          p.name,
+      'Marca':             p.brand || '',
+      'Categoria':         p.category,
+      'Codigo de Barras':  p.barcode,
+      'Precio':            p.price,
+      'Costo':             p.cost,
+      'Stock':             p.stock,
+      'Unidad':            p.unit,
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Inventario');
+    XLSX.writeFile(wb, `inventario_${new Date().toISOString().slice(0,10)}.xlsx`);
   };
 
   return (
@@ -58,6 +81,10 @@ export default function InventoryView() {
       <div className="flex items-center justify-between mb-5">
         <h2 className="text-xl font-extrabold">Inventario</h2>
         <div className="flex gap-2">
+          <button onClick={handleExport}
+            className="flex items-center gap-1.5 px-4 py-2.5 bg-slate-600 hover:bg-slate-700 text-white text-sm font-bold rounded-lg transition-all">
+            <Download size={15} /> Exportar Excel
+          </button>
           <button onClick={() => fileRef.current?.click()}
             className="flex items-center gap-1.5 px-4 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-bold rounded-lg transition-all">
             <FileSpreadsheet size={15} /> Importar Excel
@@ -70,9 +97,10 @@ export default function InventoryView() {
         </div>
       </div>
 
+      {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-5">
         {[
-          { l: 'Total Productos', v: products.length },
+          { l: 'Total Productos',  v: products.length },
           { l: 'Valor Inventario', v: fmt(totalValue) },
           { l: 'Costo Inventario', v: fmt(totalCost) },
           { l: 'Stock Bajo',       v: lowStock },
@@ -85,25 +113,36 @@ export default function InventoryView() {
         ))}
       </div>
 
-      <div className="flex gap-3 mb-4">
-        <div className="relative flex-1">
+      {/* Search + category pills */}
+      <div className="mb-4">
+        <div className="relative mb-3">
           <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar producto..."
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar producto o escanear codigo..."
             className="w-full pl-10 pr-4 py-2.5 border rounded-lg text-sm focus:border-indigo-500 outline-none" />
         </div>
-        <select value={catFilter} onChange={e => setCatFilter(e.target.value)}
-          className="px-3 py-2.5 border rounded-lg text-sm w-44 focus:border-indigo-500 outline-none">
-          <option value="Todos">Todas las Categorias</option>
-          {CATEGORIES.map(c => <option key={c}>{c}</option>)}
-        </select>
+        <div className="flex gap-2 flex-wrap">
+          <button onClick={() => setCatFilter('Todos')}
+            className={`px-4 py-2 rounded-full text-xs font-semibold border transition-all ${catFilter === 'Todos' ? 'bg-indigo-500 text-white border-indigo-500' : 'bg-white text-slate-500 border-slate-200 hover:border-indigo-300'}`}>
+            Todos
+          </button>
+          {CATEGORIES.map(c => (
+            <button key={c} onClick={() => setCatFilter(c)}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold border transition-all ${catFilter === c ? 'bg-indigo-500 text-white border-indigo-500' : 'bg-white border-slate-200 hover:border-indigo-300'}`}
+              style={catFilter === c ? {} : { color: CAT_COLORS[c] }}>
+              <CategoryIcon category={c} size={11} />
+              {c}
+            </button>
+          ))}
+        </div>
       </div>
 
+      {/* Table */}
       <div className="bg-white rounded-xl border overflow-hidden">
-        <div className="overflow-x-auto max-h-[calc(100vh-380px)] overflow-y-auto">
+        <div className="overflow-x-auto max-h-[calc(100vh-420px)] overflow-y-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-[10px] font-bold uppercase text-slate-500 bg-slate-50 sticky top-0 z-10">
-                <th className="px-4 py-3 text-left">Producto</th>
+                <th className="px-4 py-3 text-left">Producto / Marca</th>
                 <th className="px-4 py-3 text-left">Categoria</th>
                 <th className="px-4 py-3 text-left">Cod. Barras</th>
                 <th className="px-4 py-3 text-right">Precio</th>
@@ -122,11 +161,16 @@ export default function InventoryView() {
                   <tr key={p.id} className="border-t border-slate-100 hover:bg-indigo-50/30">
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded flex items-center justify-center"
+                        <div className="w-8 h-8 rounded flex items-center justify-center flex-shrink-0"
                           style={{ background: CAT_COLORS[p.category] + '22', color: CAT_COLORS[p.category] }}>
                           <CategoryIcon category={p.category} size={14} />
                         </div>
-                        <EditableCell value={p.name} onSave={v => updateProduct(p.id, { name: v })} bold />
+                        <div>
+                          <EditableCell value={p.name} onSave={v => updateProduct(p.id, { name: v })} bold />
+                          {p.brand && (
+                            <div className="text-[10px] text-slate-400 mt-0.5">{p.brand}</div>
+                          )}
+                        </div>
                       </div>
                     </td>
                     <td className="px-4 py-3">
@@ -180,32 +224,34 @@ export default function InventoryView() {
         </div>
       </div>
 
+      {/* Modal Nuevo Producto */}
       {showNew && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center" onClick={() => setShowNew(false)}>
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-[90%] p-6" onClick={e => e.stopPropagation()}>
             <h3 className="font-bold text-base mb-4 flex items-center gap-2">
               <PlusCircle size={18} className="text-indigo-500" /> Nuevo Producto
             </h3>
-            <Field label="Nombre" value={newP.name} onChange={v => setNewP({ ...newP, name: v })} />
+            <Field label="Nombre del Producto" value={newP.name} onChange={v => setNewP(p => ({ ...p, name: v }))} />
+            <Field label="Marca" value={newP.brand} onChange={v => setNewP(p => ({ ...p, brand: v }))} placeholder="ej. Finesse, Pil, Coca-Cola..." />
             <div className="grid grid-cols-2 gap-3">
               <div className="mb-3">
                 <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Categoria</label>
-                <select value={newP.category} onChange={e => setNewP({ ...newP, category: e.target.value })}
+                <select value={newP.category} onChange={e => setNewP(p => ({ ...p, category: e.target.value }))}
                   className="w-full px-3 py-2.5 border rounded-lg text-sm">
                   {CATEGORIES.map(c => <option key={c}>{c}</option>)}
                 </select>
               </div>
-              <Field label="Codigo de Barras" value={newP.barcode} onChange={v => setNewP({ ...newP, barcode: v })} />
+              <Field label="Codigo de Barras" value={newP.barcode} onChange={v => setNewP(p => ({ ...p, barcode: v }))} />
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Precio (Bs)" value={newP.price} onChange={v => setNewP({ ...newP, price: v })} type="number" />
-              <Field label="Costo (Bs)" value={newP.cost} onChange={v => setNewP({ ...newP, cost: v })} type="number" />
+              <Field label="Precio (Bs)" value={newP.price} onChange={v => setNewP(p => ({ ...p, price: v }))} type="number" />
+              <Field label="Costo (Bs)"  value={newP.cost}  onChange={v => setNewP(p => ({ ...p, cost: v }))}  type="number" />
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Stock" value={newP.stock} onChange={v => setNewP({ ...newP, stock: v })} type="number" />
+              <Field label="Stock" value={newP.stock} onChange={v => setNewP(p => ({ ...p, stock: v }))} type="number" />
               <div className="mb-3">
                 <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">Unidad</label>
-                <select value={newP.unit} onChange={e => setNewP({ ...newP, unit: e.target.value })}
+                <select value={newP.unit} onChange={e => setNewP(p => ({ ...p, unit: e.target.value }))}
                   className="w-full px-3 py-2.5 border rounded-lg text-sm">
                   <option value="pza">Pieza</option>
                   <option value="kg">Kilogramo</option>
@@ -213,16 +259,42 @@ export default function InventoryView() {
                 </select>
               </div>
             </div>
+            {saveError && (
+              <div className="mb-3 p-2.5 rounded-lg bg-red-50 border border-red-200 text-red-600 text-xs font-semibold">
+                {saveError}
+              </div>
+            )}
             <div className="flex justify-end gap-2 mt-2">
-              <button onClick={() => setShowNew(false)}
-                className="px-4 py-2 text-sm font-semibold border border-slate-200 rounded-lg">Cancelar</button>
-              <button onClick={() => {
-                if (!newP.name || !newP.price) return;
-                addProduct({ name: newP.name, category: newP.category, barcode: newP.barcode, price: parseFloat(newP.price) || 0, cost: parseFloat(newP.cost) || 0, stock: parseInt(newP.stock) || 0, unit: newP.unit });
-                setShowNew(false);
-                setNewP({ name: '', category: 'Abarrotes', barcode: '', price: '', cost: '', stock: '', unit: 'pza' });
-              }} className="flex items-center gap-1.5 px-5 py-2 text-sm font-bold bg-indigo-500 text-white rounded-lg">
-                <Save size={14} /> Guardar
+              <button disabled={saving} onClick={() => { setSaveError(''); setShowNew(false); }}
+                className="px-4 py-2 text-sm font-semibold border border-slate-200 rounded-lg disabled:opacity-50">Cancelar</button>
+              <button disabled={saving} onClick={async () => {
+                if (!newP.name || !newP.price) {
+                  setSaveError('Nombre y precio son obligatorios');
+                  return;
+                }
+                setSaving(true);
+                setSaveError('');
+                try {
+                  await addProduct({
+                    name: newP.name,
+                    brand: newP.brand,
+                    category: newP.category,
+                    barcode: newP.barcode,
+                    price: parseFloat(newP.price) || 0,
+                    cost: parseFloat(newP.cost) || 0,
+                    stock: parseInt(newP.stock) || 0,
+                    unit: newP.unit,
+                  });
+                  setShowNew(false);
+                  setNewP({ name: '', brand: '', category: 'Abarrotes', barcode: '', price: '', cost: '', stock: '', unit: 'pza' });
+                } catch (err: any) {
+                  console.error('Error creando producto:', err);
+                  setSaveError(err?.message || 'Error al crear producto. Verifica tu sesión y reintenta.');
+                } finally {
+                  setSaving(false);
+                }
+              }} className="flex items-center gap-1.5 px-5 py-2 text-sm font-bold bg-indigo-500 hover:bg-indigo-600 disabled:opacity-60 text-white rounded-lg">
+                <Save size={14} /> {saving ? 'Guardando...' : 'Guardar'}
               </button>
             </div>
           </div>
@@ -241,14 +313,14 @@ function EditableCell({ value, onSave, isNumber, bold }: { value: string; onSave
       onKeyDown={e => { if (e.key === 'Enter') { setEditing(false); onSave(val); } if (e.key === 'Escape') setEditing(false); }}
       className="w-full px-2 py-1 text-sm border border-indigo-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-200" autoFocus />
   );
-  return <span onDoubleClick={() => setEditing(true)} className={`editable-cell ${bold ? 'font-bold' : ''}`}>{value}</span>;
+  return <span onDoubleClick={() => { setVal(value); setEditing(true); }} className={`editable-cell cursor-text ${bold ? 'font-bold' : ''}`}>{value}</span>;
 }
 
-function Field({ label, value, onChange, type = 'text' }: { label: string; value: string; onChange: (v: string) => void; type?: string }) {
+function Field({ label, value, onChange, type = 'text', placeholder }: { label: string; value: string; onChange: (v: string) => void; type?: string; placeholder?: string }) {
   return (
     <div className="mb-3">
-      <label className="block text-[11px] font-semibold text-slate-500 uppercase mb-1">{label}</label>
-      <input type={type} value={value} onChange={e => onChange(e.target.value)}
+      <div className="text-[11px] font-semibold text-slate-500 uppercase mb-1">{label}</div>
+      <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
         className="w-full px-3 py-2.5 border rounded-lg text-sm focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 outline-none transition-all" />
     </div>
   );
